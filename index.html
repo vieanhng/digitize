@@ -165,7 +165,7 @@
           }
 
           const selectedQuestionsData = this.selectedQuestions.map(i => this.editedQuestions[i]);
-
+          this.isLoading = true;
           fetch('https://free-n8n.taikhoanai.store/webhook/sohoa', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -182,10 +182,12 @@
           })
           .then(result => {
             console.log("Số hóa thành công:", result);
+            this.isLoading = false;
             this.step = 5;
           })
           .catch(error => {
             console.error("Lỗi:", error);
+            this.isLoading = false;
             alert("Có lỗi xảy ra khi thực hiện số hóa.");
             this.step = 3;
           });
@@ -283,6 +285,10 @@
             } else {
               this.step--
             }
+        },
+
+        newSession(){
+          this.step = 1;
         }
       };
     }
@@ -441,6 +447,7 @@
               <template x-for="(stmt, sIndex) in q.statements" :key="sIndex">
                 <div class="flex items-center mb-1">
                   <input type="text" x-model="stmt.content" class="flex-1 border border-gray-300 rounded px-3 py-1">
+                  <button @click="removeStatement(qIndex, sIndex)" class="ml-2 text-red-500 text-sm">Xóa</button>
                 </div>
               </template>
             </div>
@@ -528,11 +535,11 @@
     <!-- Nút hành động -->
     <div class="flex justify-between items-center mt-6">
       <button
-        @click="goBack()"
+        @click="newSession"
         type="button"
-        class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition flex items-center space-x-2"
+        class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center space-x-2"
       >
-        <span>← Quay lại</span>
+        <span>Số hóa ảnh mới</span>
       </button>
     </div>
   </div>
