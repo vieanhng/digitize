@@ -11,6 +11,8 @@
         step: -1,
         username: '',
         password: '',
+        uiid: '',
+        token:'',
         uploadedFiles: '',
         ocrResults: [],
         editedQuestions: [],
@@ -40,6 +42,8 @@
                 token: result.token,
                 username: this.username
               }));
+              this.uiid = result.uiid;
+              this.token = result.token;
               this.step = 1;
             } else {
               alert(result.message || "Đăng nhập thất bại");
@@ -70,6 +74,8 @@
             if (data.success) {
               const user = JSON.parse(userStr);
               this.username = user.username;
+              this.uiid = user.uiid;
+              this.token = user.token;
               this.step = 1;
             } else {
               localStorage.removeItem('user');
@@ -166,7 +172,8 @@
             body: JSON.stringify({
               questions: selectedQuestionsData,
               bank: this.selectedBank,
-              user: this.username
+              uiid: this.uiid,
+              token: this.token
             })
           })
           .then(response => {
