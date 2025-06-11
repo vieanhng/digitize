@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="vi" x-data="app()" x-init="checkAuth" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ứng dụng số hóa câu hỏi từ ảnh</title>
+  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"  defer></script>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+  <script>
+    function app() {
+      return {
+        step: -1,
+        username: '',
+        password: '',
+        uploadedFiles: '',
+        ocrResults: [],
+        editedQuestions: [],
+        selectedQuestions: [],
+        selectAll: false,
+        selectedBank: '',
+        isLoading: false,
+
+        async login() {
+          if (!this.username || !this.password) {
+            alert("Vui lòng nhập tên đăng nhập và mật khẩu");
+            return;
+          }
+
+          try {
+            const response = await fetch('https://free-n8n.taikhoanai.store/webhook/login-lms', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ u: this.username, p: this.password })
+            });
+
+            const result = await response.json();
+
+            if (result.success && result.uiid && result.token) {
+              localStorage.setItem('user', JSON.stringify({
+                uiid: result.uiid,
+                token: result.token,
+                username: this.username
+              }));
+              this.step = 1;
+            } else {
+              alert(result.message || "Đăng nhập thất bại");
+            }
+          } catch (err) {
+            console.error(err);
+            alert("Lỗi kết nối đến máy chủ.");
+          }
+        },
+
+        async checkAuth() {
+          const userStr = localStorage.getItem('user');
+          if (!userStr) {
+            this.step = 0;
+            return;
+          }
+
+          const { uiid, token } = JSON.parse(userStr);
+
+          try {
+            const res = await fetch('https://free-n8n.taikhoanai.store/webhook/check-user', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ uiid, token })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+              const user = JSON.parse(userStr);
+              this.username = user.username;
+              this.step = 1;
+            } else {
+              localStorage.removeItem('user');
+              alert("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.");
+              this.step = 0;
+            }
+          } catch (err) {
+            console.error(err);
+            alert("Không thể kiểm tra phiên đăng nhập.");
+            this.step = 0;
+          }
+        },
+
+        handleFileInput(event){
+          this.uploadedFiles = event.target.files
+        },
+
+        uploadImages(event) {
+          this.isLoading = true;
+          if (this.uploadedFiles.length && this.selectedBank) {
+            // Giả lập OCR cho từng ảnh thành JSON
+            this.ocrResults = [];
+            this.editedQuestions = [];
+
+            let count = 1;
+            const API_URL = 'https://free-n8n.taikhoanai.store/webhook/upload-image';
+
+            const formData = new FormData();
+            Array.from(this.uploadedFiles).forEach((file, index) => {
+              formData.append('data[]', file);
+            });
+            formData.append('bank', this.selectedBank);
+
+            // Gửi request lên API
+            fetch(API_URL, {
+              method: 'POST',
+              body: formData
+            })
+            .then(response => {
+              if (!response.ok) throw new Error("Lỗi khi gọi API");
+              return response.json();
+            })
+            .then(data => {
+                this.editedQuestions = [...this.editedQuestions,...data];
+                this.step = 2;
+                this.isLoading = false;
+
+            })
+            .catch(err => {
+              console.error(err);
+              alert(`Lỗi tải ảnh ${file.name} lên server`);
+            });
+
+
+          } else {
+            alert("Vui lòng chọn ngân hàng và tải ít nhất một ảnh");
+          }
+        },
+
+        confirmEdit() {
+          this.step = 3;
+        },
+
+        toggleQuestion(index) {
+          const i = this.selectedQuestions.indexOf(index);
+          if (i === -1) {
+            this.selectedQuestions.push(index);
+          } else {
+            this.selectedQuestions.splice(i, 1);
+          }
+          this.selectAll = this.selectedQuestions.length === this.editedQuestions.length;
+        },
+
+        selectAllQuestions(event) {
+          this.selectAll = event.target.checked;
+          if (this.selectAll) {
+            this.selectedQuestions = [...Array(this.editedQuestions.length).keys()];
+          } else {
+            this.selectedQuestions = [];
+          }
+        },
+
+        digitize() {
+          if (this.selectedQuestions.length === 0) {
+            alert("Vui lòng chọn ít nhất một câu hỏi để số hóa.");
+            return;
+          }
+
+          const selectedQuestionsData = this.selectedQuestions.map(i => this.editedQuestions[i]);
+
+          fetch('https://free-n8n.taikhoanai.store/webhook/sohoa', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              questions: selectedQuestionsData,
+              bank: this.selectedBank,
+              user: this.username
+            })
+          })
+          .then(response => {
+            if (!response.ok) throw new Error("Gửi dữ liệu thất bại");
+            return response.json();
+          })
+          .then(result => {
+            console.log("Số hóa thành công:", result);
+            this.step = 5;
+          })
+          .catch(error => {
+            console.error("Lỗi:", error);
+            alert("Có lỗi xảy ra khi thực hiện số hóa.");
+            this.step = 3;
+          });
+        },
+
+        addQuestion(type) {
+          if (type === 'MC') {
+            this.editedQuestions.push({
+              type: 'MC',
+              question: '',
+              options: ['', '', '', ''],
+              answers: []
+            });
+          } else if (type === 'FILL') {
+            this.editedQuestions.push({
+              type: 'FILL',
+              question: 'Câu hỏi điền vào chỗ trống: __đáp án__.',
+              answers: []
+            });
+          } else if (type === 'TF') {
+            this.editedQuestions.push({
+              type: 'TF',
+              title: 'Xác định tính đúng/sai:',
+              statements: [
+                { content: '', answer: 'true' },
+                { content: '', answer: 'true' },
+                { content: '', answer: 'true' }
+              ]
+            });
+          }
+        },
+
+        removeQuestion(index) {
+          this.editedQuestions.splice(index, 1);
+        },
+
+        extractAnswersFromFill(qIndex) {
+          const questionText = this.editedQuestions[qIndex].question;
+          const matches = [...questionText.matchAll(/__(.*?)__/g)];
+          const answers = matches.map(m => m[1]);
+          this.editedQuestions[qIndex].answers = answers;
+        },
+
+        toggleAnswer(qIndex, optionIndex) {
+          const index = this.editedQuestions[qIndex].answers.indexOf(optionIndex);
+          if (index === -1) {
+            this.editedQuestions[qIndex].answers.push(optionIndex);
+          } else {
+            this.editedQuestions[qIndex].answers.splice(index, 1);
+          }
+        },
+
+        addOption(qIndex) {
+          this.editedQuestions[qIndex].options.push('');
+        },
+
+        removeOption(qIndex, oIndex) {
+          const q = this.editedQuestions[qIndex];
+          q.options.splice(oIndex, 1);
+          const ansIndex = q.answers.indexOf(oIndex);
+          if (ansIndex !== -1) q.answers.splice(ansIndex, 1);
+          q.answers = q.answers.map(a => a > oIndex ? a - 1 : a);
+        },
+
+        addStatement(qIndex) {
+          this.editedQuestions[qIndex].statements.push({ content: '', answer: 'true' });
+        },
+
+        removeStatement(qIndex, sIndex) {
+          this.editedQuestions[qIndex].statements.splice(sIndex, 1);
+        },
+        logout() {
+          if (confirm("Bạn có chắc chắn muốn đăng xuất?")) {
+            // Xóa thông tin người dùng khỏi localStorage
+            localStorage.removeItem('user');
+
+            // Reset toàn bộ trạng thái
+            this.username = '';
+            this.password = '';
+            this.selectedBank = '';
+            this.uploadedFiles = [];
+            this.ocrResults = [];
+            this.editedQuestions = [];
+            this.selectedQuestions = [];
+            this.selectAll = false;
+
+            // Quay về bước đăng nhập
+            this.step = 0;
+          }
+        },
+
+        goBack() {
+          if (this.step === 5 || this.step === 4) {
+              this.step = 3;
+            } else {
+              this.step--
+            }
+        }
+      };
+    }
+  </script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+  <!-- Header -->
+  <template x-if="isLoading">
+    <div class="fixed inset-0 bg-gray-900 bg-opacity-70 flex items-center justify-center z-50">
+      <div class="bg-white p-4 rounded-lg shadow-lg flex items-center space-x-4">
+        <svg class="animate-spin h-6 w-6 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V4a10 10 0 1010 10h-2a8 8 0 01-8-8z"></path>
+        </svg>
+        <span class="font-medium text-gray-700">Đang xử lý, vui lòng chờ...</span>
+      </div>
+    </div>
+  </template>
+
+  <div class="w-full max-w-4xl bg-white shadow-lg rounded-lg p-6 space-y-6">
+    <div class="max-w-4xl mx-auto px-6 flex justify-between items-center">
+      <h1 class="text-lg font-semibold text-gray-800">Ứng dụng số hóa câu hỏi từ ảnh</h1>
+
+      <!-- Nút đăng xuất -->
+      <button
+        @click="logout()"
+        class="text-sm text-red-600 hover:underline"
+        x-show="step > 0"
+      >
+        Đăng xuất
+      </button>
+    </div>
+    <hr>
+    <!-- Breadcrumb -->
+    <div class="flex items-center text-sm text-gray-500 mb-6">
+      <span :class="{ 'font-semibold text-blue-600': step >= 0 }">Đăng nhập</span>
+      <span class="flex-1 border-t border-gray-300 mx-2"></span>
+      <span :class="{ 'font-semibold text-blue-600': step >= 1 }">Tải ảnh & Chọn ngân hàng</span>
+      <span class="flex-1 border-t border-gray-300 mx-2"></span>
+      <span :class="{ 'font-semibold text-blue-600': step >= 2 }">Chỉnh sửa nội dung</span>
+      <span class="flex-1 border-t border-gray-300 mx-2"></span>
+      <span :class="{ 'font-semibold text-blue-600': step >= 3 }">Xác nhận chọn</span>
+      <span class="flex-1 border-t border-gray-300 mx-2"></span>
+      <span :class="{ 'font-semibold text-blue-600': step >= 5 }">Hoàn tất</span>
+    </div>
+<template x-if="step === 0">
+    <!-- B0: Đăng nhập -->
+
+    <div>
+      <h2 class="text-xl font-bold mb-4 text-gray-700">Đăng nhập tài khoản</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Tên đăng nhập:</label>
+          <input type="text" x-model="username" class="w-full border border-gray-300 rounded px-3 py-2" placeholder="Nhập tên đăng nhập" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Mật khẩu:</label>
+          <input type="password" x-model="password" class="w-full border border-gray-300 rounded px-3 py-2" placeholder="Nhập mật khẩu" />
+        </div>
+        <button @click="login()" class="mt-2 w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition">Đăng nhập</button>
+      </div>
+    </div>
+    </template>
+    <template x-if="step === 1">
+    <!-- B1: Nhập nhiều ảnh, Chọn ngân hàng -->
+    <div>
+      <h2 class="text-xl font-bold mb-4 text-gray-700">Chọn ngân hàng và tải nhiều ảnh lên</h2>
+      <label class="block mb-4">
+          <span class="block text-sm font-medium text-gray-700 mb-1">Chọn ngân hàng câu hỏi:</span>
+          <div class="relative">
+            <input
+              type="text"
+              x-model="selectedBank"
+              placeholder="Nhập ID Ngân hàng"
+              class="w-full border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 px-3 py-2"
+              autocomplete="off"
+            />
+          </div>
+        </label>
+      <label class="block">
+        <span class="block text-sm font-medium text-gray-700 mb-1">Tải ảnh lên (có thể chọn nhiều):</span>
+        <input type="file" multiple accept="image/*" @change="handleFileInput"  class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+
+      </label>
+      <div class="flex justify-between items-center mt-6">
+        <div class="">
+
+        </div>
+          <button
+            @click="uploadImages"
+            class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
+          >
+            Tiếp tục
+          </button>
+        </div>
+    </div>
+
+  </template>
+<template x-if="step === 2">
+    <!-- B2: Chỉnh sửa nội dung câu hỏi -->
+    <div>
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold text-gray-700">Chỉnh sửa nội dung câu hỏi</h2>
+        <div class="space-x-2">
+          <button @click="addQuestion('MC')" class="text-xs px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">Thêm MC</button>
+          <button @click="addQuestion('FILL')" class="text-xs px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600">Thêm FILL</button>
+          <button @click="addQuestion('TF')" class="text-xs px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600">Thêm TF</button>
+        </div>
+      </div>
+
+      <template x-for="(q, qIndex) in editedQuestions" :key="qIndex">
+        <div class="mb-6 border rounded-lg p-4 bg-gray-50 space-y-4">
+          <div class="flex justify-between items-center">
+            <strong x-text="`Câu hỏi ${q.type}`"></strong>
+            <button @click="removeQuestion(qIndex)" class="text-red-500 text-sm">Xóa câu hỏi</button>
+          </div>
+
+          <!-- Câu hỏi MC -->
+          <div x-show="q.type === 'MC'">
+            <label class="block mb-2 font-medium">Nội dung câu hỏi:</label>
+            <input type="text" x-model="q.question" class="w-full border border-gray-300 rounded px-3 py-2 mb-2">
+            <div class="mb-2">
+              <label class="font-medium block mb-1">Tùy chọn:</label>
+              <template x-for="(option, oIndex) in q.options" :key="oIndex">
+                <div class="flex items-center mb-1">
+                  <input type="text" x-model="q.options[oIndex]" class="flex-1 border border-gray-300 rounded px-3 py-1">
+                  <button @click="removeOption(qIndex, oIndex)" class="ml-2 text-red-500 text-sm">Xóa</button>
+                </div>
+              </template>
+            </div>
+            <button @click="addOption(qIndex)" class="text-blue-500 text-sm">+ Thêm tùy chọn</button>
+          </div>
+
+          <!-- Câu hỏi FILL -->
+          <div x-show="q.type === 'FILL'">
+            <label class="block mb-2 font-medium">Nội dung câu hỏi (dùng __ để đánh dấu vị trí đáp án):</label>
+            <textarea
+              x-model="q.question"
+              x-init="extractAnswersFromFill(qIndex)"
+              @input="extractAnswersFromFill(qIndex)"
+              rows="3"
+              class="w-full border border-gray-300 rounded px-3 py-2 mb-2"
+            ></textarea>
+            <div class="mb-2">
+              <label class="font-medium block mb-1">Đáp án được trích xuất:</label>
+              <div class="text-sm text-gray-600" x-text="q.answers ? q.answers.join(', ') : 'Không có đáp án nào được trích xuất'"></div>
+            </div>
+          </div>
+
+          <!-- Câu hỏi TF -->
+          <div x-show="q.type === 'TF'">
+            <label class="block mb-2 font-medium">Tiêu đề:</label>
+            <input type="text" x-model="q.title" class="w-full border border-gray-300 rounded px-3 py-2 mb-2">
+            <div class="mb-2">
+              <label class="font-medium block mb-1">Phát biểu:</label>
+              <template x-for="(stmt, sIndex) in q.statements" :key="sIndex">
+                <div class="flex items-center mb-1">
+                  <input type="text" x-model="stmt.content" class="flex-1 border border-gray-300 rounded px-3 py-1">
+                </div>
+              </template>
+            </div>
+            <button @click="addStatement(qIndex)" class="text-blue-500 text-sm">+ Thêm phát biểu</button>
+          </div>
+        </div>
+      </template>
+
+      <div class="flex justify-between items-center mt-6">
+    <button
+      @click="goBack()"
+      type="button"
+      class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+    >
+      ← Quay lại
+    </button>
+    <button
+      @click="confirmEdit"
+      class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
+    >
+      Xác nhận chỉnh sửa
+    </button>
+  </div>
+    </div>
+</template>
+<template x-if="step === 3">
+    <!-- B3: Tick chọn nhiều câu hỏi cần số hóa -->
+    <div>
+      <h2 class="text-xl font-bold mb-4 text-gray-700">Tick chọn câu hỏi để số hóa</h2>
+      <div class="mb-4 flex items-center">
+        <input type="checkbox" x-model="selectAll" @click="selectAllQuestions" id="selectAll" class="h-5 w-5 text-blue-600 rounded focus:ring-blue-500">
+        <label for="selectAll" class="ml-2 font-medium text-gray-700">Chọn tất cả</label>
+      </div>
+
+      <template x-for="(question, index) in editedQuestions" :key="index">
+        <div class="border p-4 rounded-lg bg-gray-50 mb-4">
+          <label class="flex items-start cursor-pointer">
+            <input type="checkbox" :checked="selectedQuestions.includes(index)" @click="toggleQuestion(index)" class="mt-1 h-5 w-5 text-blue-600 rounded focus:ring-blue-500">
+            <div class="ml-3 whitespace-pre-wrap" x-text="question.type == 'TF' ? question.title : question.question"></div>
+          </label>
+        </div>
+      </template>
+
+      <div class="flex justify-between items-center mt-6">
+          <button
+            @click="goBack()"
+            type="button"
+            class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+          >
+            ← Quay lại
+          </button>
+          <button
+            @click="digitize"
+            class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
+          >
+            Số hóa
+          </button>
+        </div>
+    </div>
+</template>
+<template x-if="step === 4">
+    <!-- B4: Đang xử lý -->
+    <div>
+      <h2 class="text-xl font-bold mb-4 text-gray-700">Đang thực hiện số hóa...</h2>
+      <div class="flex justify-center py-8">
+        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    </div>
+</template>
+<template x-if="step === 5">
+  <div class="flex flex-col items-center justify-center min-h-[200px] text-center">
+    <!-- Icon thành công -->
+    <div class="flex items-center mb-4">
+      <svg class="w-8 h-8 text-green-500 mr-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+      </svg>
+      <h2 class="text-xl font-bold text-gray-800">Số hóa thành công!</h2>
+    </div>
+
+    <!-- Thông báo kết quả -->
+    <p class="text-green-700 text-lg mb-6">
+      ✅ Các câu hỏi đã được lưu vào hệ thống.
+    </p>
+
+    <!-- Nút hành động -->
+    <div class="flex justify-between items-center mt-6">
+      <button
+        @click="goBack()"
+        type="button"
+        class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition flex items-center space-x-2"
+      >
+        <span>← Quay lại</span>
+      </button>
+    </div>
+  </div>
+</template>
+  </div>
+
+</body>
+</html>
