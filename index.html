@@ -108,6 +108,8 @@
               formData.append('data[]', file);
             });
             formData.append('bank', this.selectedBank);
+            formData.append('uiid', this.uiid);
+            formData.append('token', this.token);
 
             // Gửi request lên API
             fetch(API_URL, {
