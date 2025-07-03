@@ -18,7 +18,10 @@
         editedQuestions: [],
         selectedQuestions: [],
         selectAll: false,
-        selectedBank: '',
+        selectedBank: '',      // Lưu iid của ngân hàng
+   selectedBankLink: '',  // Dùng để nhập link ngân hàng
+   bankName: '',          // Tên ngân hàng từ API
+   bankError: '',         // Thông báo lỗi nếu có
         isLoading: false,
 
         async login() {
@@ -89,6 +92,43 @@
           }
         },
 
+        async confirmBank() {
+  if (!this.selectedBankLink) {
+    alert("Vui lòng nhập link ngân hàng");
+    return;
+  }
+
+  this.isLoading = true;
+  this.bankError = '';
+  this.bankName = '';
+
+  const formData = new FormData();
+  formData.append('link', this.selectedBankLink);
+  formData.append('token', this.token);
+  formData.append('uiid', this.uiid);
+
+  try {
+    const response = await fetch('https://free-n8n.taikhoanai.store/webhook/find-bank ', {
+      method: 'POST',
+      body: formData
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      this.selectedBank = result.iid; // Lưu iid
+      this.bankName = result.name;
+    } else {
+      this.bankError = result.message || "Không thể truy cập ngân hàng này";
+    }
+  } catch (err) {
+    console.error(err);
+    this.bankError = "Lỗi kết nối đến máy chủ.";
+  } finally {
+    this.isLoading = false;
+  }
+},
+
         handleFileInput(event){
           this.uploadedFiles = event.target.files
         },
@@ -132,7 +172,12 @@
 
 
           } else {
-            alert("Vui lòng chọn ngân hàng và tải ít nhất một ảnh");
+            if (!this.selectedBank) {
+      alert("Vui lòng xác nhận chọn ngân hàng trước.");
+    } else {
+      alert("Vui lòng tải ít nhất một ảnh");
+    }
+    this.isLoading = false;
           }
         },
 
@@ -358,17 +403,26 @@
     <div>
       <h2 class="text-xl font-bold mb-4 text-gray-700">Chọn ngân hàng và tải nhiều ảnh lên</h2>
       <label class="block mb-4">
-          <span class="block text-sm font-medium text-gray-700 mb-1">Chọn ngân hàng câu hỏi:</span>
-          <div class="relative">
-            <input
-              type="text"
-              x-model="selectedBank"
-              placeholder="Nhập ID Ngân hàng"
-              class="w-full border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 px-3 py-2"
-              autocomplete="off"
-            />
-          </div>
-        </label>
+        <span class="block text-sm font-medium text-gray-700 mb-2">Nhập link ngân hàng:</span>
+        <div class="flex items-center gap-3">
+          <input
+            type="text"
+            x-model="selectedBankLink"
+            placeholder="Nhập link Ngân hàng"
+            class="flex-grow border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 px-3 py-2 text-sm"
+            autocomplete="off"
+          />
+          <button
+            @click="confirmBank"
+            class="h-[40px] px-4 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 transition"
+          >
+            Xác nhận
+          </button>
+        </div>
+        <p x-show="bankName" class="mt-2 text-sm text-green-600" x-text="`Tên ngân hàng: ${bankName}`"></p>
+        <p x-show="bankError" class="mt-2 text-sm text-red-600" x-text="bankError"></p>
+      </label>
+
       <label class="block">
         <span class="block text-sm font-medium text-gray-700 mb-1">Tải ảnh lên (có thể chọn nhiều):</span>
         <input type="file" multiple accept="image/*" @change="handleFileInput"  class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
