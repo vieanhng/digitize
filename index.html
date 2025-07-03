@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi" x-data="app()" x-init="checkAuth" xmlns="http://www.w3.org/1999/xhtml">
+<html lang="vi" x-data="app()" xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <meta charset="UTF-8" />
   <title>Ứng dụng số hóa câu hỏi từ ảnh</title>
@@ -19,9 +19,9 @@
         selectedQuestions: [],
         selectAll: false,
         selectedBank: '',      // Lưu iid của ngân hàng
-   selectedBankLink: '',  // Dùng để nhập link ngân hàng
-   bankName: '',          // Tên ngân hàng từ API
-   bankError: '',         // Thông báo lỗi nếu có
+        selectedBankLink: '',  // Dùng để nhập link ngân hàng
+        bankName: '',          // Tên ngân hàng từ API
+        bankError: '',         // Thông báo lỗi nếu có
         isLoading: false,
 
         async login() {
@@ -129,11 +129,11 @@
   }
 },
 
-        handleFileInput(event){
+        async handleFileInput(event){
           this.uploadedFiles = event.target.files
         },
 
-        uploadImages(event) {
+        async uploadImages(event) {
           this.isLoading = true;
           if (this.uploadedFiles.length && this.selectedBank) {
             // Giả lập OCR cho từng ảnh thành JSON
@@ -160,7 +160,32 @@
               return response.json();
             })
             .then(data => {
-                this.editedQuestions = [...this.editedQuestions,...data];
+                this.editedQuestions = data.map((item)=>{
+                  if(item.type == "MC"){
+                    return {
+                      ...item,
+                      answers : [0]
+                    }
+                  }
+
+                  if(item.type == "FILL"){
+                    const questionText = item.question;
+                    const matches = [...questionText.matchAll(/__(.*?)__/g)];
+                    const answers = matches.map(m => m[1]);
+                    return {
+                      ...item,
+                      answers: answers
+                    }
+                  }
+
+                  if(item.type == "TF"){
+                    const statements = item.statements
+                    return {
+                      ...item,
+                      statements : statements.map( item => ({...item, answer:true}))
+                    }
+                  }
+                })
                 this.step = 2;
                 this.isLoading = false;
 
@@ -204,7 +229,7 @@
           }
         },
 
-        digitize() {
+        async digitize() {
           if (this.selectedQuestions.length === 0) {
             alert("Vui lòng chọn ít nhất một câu hỏi để số hóa.");
             return;
@@ -335,6 +360,14 @@
 
         newSession(){
           this.step = 1;
+        },
+
+        setAnswer(qIndex, oIndex) {
+          this.editedQuestions[qIndex].answers = [oIndex];
+        },
+
+        init(){
+          this.checkAuth();
         }
       };
     }
@@ -471,10 +504,8 @@
                 <div class="flex items-center mb-1">
                   <input type="text" x-model="q.options[oIndex]" class="flex-1 border border-gray-300 rounded px-3 py-1">
                   <label class="ml-2 flex items-center">
-                    <input type="radio" :checked="q.answers.includes(oIndex)" @click="
-                      q.answers.includes(oIndex)
-                        ? q.answers.splice(q.answers.indexOf(oIndex), 1)
-                        : q.answers.push(oIndex)
+                    <input type="radio" :checked="q.answers[0] == oIndex" @click="
+                      setAnswer(qIndex, +oIndex)
                     ">
                     <span class="ml-1">Đáp án</span>
                   </label>
@@ -490,7 +521,6 @@
             <label class="block mb-2 font-medium">Nội dung câu hỏi (dùng __ để đánh dấu vị trí đáp án):</label>
             <textarea
               x-model="q.question"
-              x-init="extractAnswersFromFill(qIndex)"
               @input="extractAnswersFromFill(qIndex)"
               rows="3"
               class="w-full border border-gray-300 rounded px-3 py-2 mb-2"
@@ -510,9 +540,9 @@
               <template x-for="(stmt, sIndex) in q.statements" :key="sIndex">
                 <div class="flex items-center mb-1">
                   <input type="text" x-model="stmt.content" class="flex-1 border border-gray-300 rounded px-3 py-1">
-                  <select x-model="stmt.answer" class="ml-2 border border-gray-300 rounded px-2">
-                    <option value=0>Đúng</option>
-                    <option value=1>Sai</option>
+                  <select x-model="stmt.answer ? 1 : 0" class="ml-2 border border-gray-300 rounded px-2">
+                    <option value=1>Đúng</option>
+                    <option value=0>Sai</option>
                   </select>
                   <button @click="removeStatement(qIndex, sIndex)" class="ml-2 text-red-500 text-sm">Xóa</button>
                 </div>
@@ -596,7 +626,7 @@
 
     <!-- Thông báo kết quả -->
     <p class="text-green-700 text-lg mb-6">
-      Các câu hỏi đã được lưu vào hệ thống.
+      Các câu hỏi đã được lưu vào ngân hàng <span class="text-bold" x-text="bankName"></span>
     </p>
 
     <!-- Nút hành động -->
