@@ -100,7 +100,6 @@
             this.ocrResults = [];
             this.editedQuestions = [];
 
-            let count = 1;
             const API_URL = 'https://free-n8n.taikhoanai.store/webhook/upload-image';
 
             const formData = new FormData();
@@ -417,6 +416,14 @@
               <template x-for="(option, oIndex) in q.options" :key="oIndex">
                 <div class="flex items-center mb-1">
                   <input type="text" x-model="q.options[oIndex]" class="flex-1 border border-gray-300 rounded px-3 py-1">
+                  <label class="ml-2 flex items-center">
+                    <input type="radio" :checked="q.answers.includes(oIndex)" @click="
+                      q.answers.includes(oIndex)
+                        ? q.answers.splice(q.answers.indexOf(oIndex), 1)
+                        : q.answers.push(oIndex)
+                    ">
+                    <span class="ml-1">Đáp án</span>
+                  </label>
                   <button @click="removeOption(qIndex, oIndex)" class="ml-2 text-red-500 text-sm">Xóa</button>
                 </div>
               </template>
@@ -449,6 +456,10 @@
               <template x-for="(stmt, sIndex) in q.statements" :key="sIndex">
                 <div class="flex items-center mb-1">
                   <input type="text" x-model="stmt.content" class="flex-1 border border-gray-300 rounded px-3 py-1">
+                  <select x-model="stmt.answer" class="ml-2 border border-gray-300 rounded px-2">
+                    <option value=0>Đúng</option>
+                    <option value=1>Sai</option>
+                  </select>
                   <button @click="removeStatement(qIndex, sIndex)" class="ml-2 text-red-500 text-sm">Xóa</button>
                 </div>
               </template>
@@ -531,7 +542,7 @@
 
     <!-- Thông báo kết quả -->
     <p class="text-green-700 text-lg mb-6">
-      ✅ Các câu hỏi đã được lưu vào hệ thống.
+      Các câu hỏi đã được lưu vào hệ thống.
     </p>
 
     <!-- Nút hành động -->
