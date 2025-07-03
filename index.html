@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Ứng dụng số hóa câu hỏi từ ảnh</title>
+  <link rel="icon" type="image/x-icon" href="https://static-cloud.lotuslms.com/static/aeglobal/2025/04/16/42/6576b1b5d18d78fd5f032742/67ff0c984c83a5493c0fb176.png">
   <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"  defer></script>
   <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
   <script>
@@ -392,13 +393,15 @@
       <h1 class="text-lg font-semibold text-gray-800">Ứng dụng số hóa câu hỏi từ ảnh</h1>
 
       <!-- Nút đăng xuất -->
+      <div class="bg-gray-200 rounded-2xl p-1 px-3" x-show="step > 0">
+      Tài khoản: <span x-text="username"></span>
       <button
         @click="logout()"
         class="text-sm text-red-600 hover:underline"
-        x-show="step > 0"
       >
         Đăng xuất
       </button>
+      </div>
     </div>
     <hr>
     <!-- Breadcrumb -->
@@ -641,6 +644,19 @@
     </div>
   </div>
 </template>
+    <footer class="mt-8 border-t border-gray-300 pt-4 text-center text-sm text-gray-600">
+      <p>
+        Hướng dẫn sử dụng:
+        <a
+                href=" https://docs.google.com/document/d/13nGqkB_lTaCx5ruf2Im0xQ3ICyPKVMbc3kZgybehCWA/edit?tab=t.0"
+                target="_blank"
+                class="text-blue-500 hover:underline"
+        >
+          Xem tài liệu hướng dẫn tại đây
+        </a>
+      </p>
+      <p class="mt-2">© 2025 - Ứng dụng số hóa câu hỏi từ ảnh</p>
+    </footer>
   </div>
 
 </body>
