@@ -157,11 +157,22 @@
               body: formData
             })
             .then(response => {
-              if (!response.ok) throw new Error("Lỗi khi gọi API");
-              return response.json();
+              if (!response.ok){
+                alert("Có thể đã xảy ra lỗi. Vui lòng thử lại")
+                this.isLoading = false;
+                return;
+              }
+              return response.json()
             })
             .then(data => {
-                this.editedQuestions = data.map((item)=>{
+
+              if(!data?.success){
+                alert("Có thể đã xảy ra lỗi. Vui lòng thử lại")
+                this.isLoading = false;
+                return
+              }
+
+              this.editedQuestions = data?.data?.questions.map((item)=>{
                   if(item.type == "MC"){
                     return {
                       ...item,
