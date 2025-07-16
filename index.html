@@ -597,7 +597,7 @@
         <div class="border p-4 rounded-lg bg-gray-50 mb-4">
           <label class="flex items-start cursor-pointer">
             <input type="checkbox" :checked="selectedQuestions.includes(index)" @click="toggleQuestion(index)" class="mt-1 h-5 w-5 text-blue-600 rounded focus:ring-blue-500">
-            <div class="ml-3 whitespace-pre-wrap" x-text="question.type == 'TF' ? question.title : question.question"></div>
+            <div class="ml-3 whitespace-pre-wrap" x-text="question.type != 'TF' ? question.title : question.question"></div>
           </label>
         </div>
       </template>
