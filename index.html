@@ -293,7 +293,7 @@
           } else if (type === 'TF') {
             this.editedQuestions.push({
               type: 'TF',
-              title: 'Xác định tính đúng/sai:',
+              question: 'Xác định tính đúng/sai:',
               statements: [
                 { content: '', answer: 'true' },
                 { content: '', answer: 'true' },
@@ -548,7 +548,7 @@
           <!-- Câu hỏi TF -->
           <div x-show="q.type === 'TF'">
             <label class="block mb-2 font-medium">Tiêu đề:</label>
-            <input type="text" x-model="q.title" class="w-full border border-gray-300 rounded px-3 py-2 mb-2">
+            <input type="text" x-model="q.question" class="w-full border border-gray-300 rounded px-3 py-2 mb-2">
             <div class="mb-2">
               <label class="font-medium block mb-1">Phát biểu:</label>
               <template x-for="(stmt, sIndex) in q.statements" :key="sIndex">
