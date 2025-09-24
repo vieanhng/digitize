@@ -571,7 +571,7 @@
           <!-- Câu hỏi TF -->
           <div x-show="q.type === 'TF'">
             <label class="block mb-2 font-medium">Tiêu đề:</label>
-            <input type="text" x-model="q.question" class="w-full border border-gray-300 rounded px-3 py-2 mb-2">
+            <input type="text" x-model="q.title" class="w-full border border-gray-300 rounded px-3 py-2 mb-2">
             <div class="mb-2">
               <label class="font-medium block mb-1">Phát biểu:</label>
               <template x-for="(stmt, sIndex) in q.statements" :key="sIndex">
@@ -620,7 +620,7 @@
         <div class="border p-4 rounded-lg bg-gray-50 mb-4">
           <label class="flex items-start cursor-pointer">
             <input type="checkbox" :checked="selectedQuestions.includes(index)" @click="toggleQuestion(index)" class="mt-1 h-5 w-5 text-blue-600 rounded focus:ring-blue-500">
-            <div class="ml-3 whitespace-pre-wrap" x-text="question.type != 'TF' ? question.title : question.question"></div>
+            <div class="ml-3 whitespace-pre-wrap" x-text="question.type == 'TF' ? question.title : question.question"></div>
           </label>
         </div>
       </template>
