@@ -195,6 +195,12 @@
                 return
               }
 
+              if(!data?.data?.questions){
+                alert("Có thể đã xảy ra lỗi. Vui lòng thử lại")
+                this.isLoading = false;
+                return
+              }
+
               this.editedQuestions = data?.data?.questions.map((item)=>{
                   if(item.type == "MC"){
                     return {
@@ -203,7 +209,7 @@
                     }
                   }
 
-                  if(item.type == "FILL"){
+                  if(item.type == "SA"){
                     const questionText = item.question;
                     const matches = [...questionText.matchAll(/__(.*?)__/g)];
                     const answers = matches.map(m => m[1]);
@@ -307,9 +313,9 @@
               options: ['', '', '', ''],
               answers: []
             });
-          } else if (type === 'FILL') {
+          } else if (type === 'SA') {
             this.editedQuestions.push({
-              type: 'FILL',
+              type: 'SA',
               question: 'Câu hỏi điền vào chỗ trống: __đáp án__.',
               answers: []
             });
@@ -519,7 +525,7 @@
         <h2 class="text-xl font-bold text-gray-700">Chỉnh sửa nội dung câu hỏi</h2>
         <div class="space-x-2">
           <button @click="addQuestion('MC')" class="text-xs px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">Thêm MC</button>
-          <button @click="addQuestion('FILL')" class="text-xs px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600">Thêm FILL</button>
+          <button @click="addQuestion('SA')" class="text-xs px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600">Thêm SA</button>
           <button @click="addQuestion('TF')" class="text-xs px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600">Thêm TF</button>
         </div>
       </div>
@@ -553,8 +559,29 @@
             <button @click="addOption(qIndex)" class="text-blue-500 text-sm">+ Thêm tùy chọn</button>
           </div>
 
+          <div x-show="q.type === 'MMC'">
+            <label class="block mb-2 font-medium">Nội dung câu hỏi:</label>
+            <input type="text" x-model="q.question" class="w-full border border-gray-300 rounded px-3 py-2 mb-2">
+            <div class="mb-2">
+              <label class="font-medium block mb-1">Tùy chọn:</label>
+              <template x-for="(option, oIndex) in q.options" :key="oIndex">
+                <div class="flex items-center mb-1">
+                  <input type="text" x-model="q.options[oIndex]" class="flex-1 border border-gray-300 rounded px-3 py-1">
+                  <label class="ml-2 flex items-center">
+                    <input type="radio" :checked="q.answers[0] == oIndex" @click="
+                      setAnswer(qIndex, +oIndex)
+                    ">
+                    <span class="ml-1">Đáp án</span>
+                  </label>
+                  <button @click="removeOption(qIndex, oIndex)" class="ml-2 text-red-500 text-sm">Xóa</button>
+                </div>
+              </template>
+            </div>
+            <button @click="addOption(qIndex)" class="text-blue-500 text-sm">+ Thêm tùy chọn</button>
+          </div>
+
           <!-- Câu hỏi FILL -->
-          <div x-show="q.type === 'FILL'">
+          <div x-show="q.type === 'SA'">
             <label class="block mb-2 font-medium">Nội dung câu hỏi (dùng __ để đánh dấu vị trí đáp án):</label>
             <textarea
               x-model="q.question"
