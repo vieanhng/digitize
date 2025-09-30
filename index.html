@@ -24,6 +24,8 @@
         bankName: '',          // Tên ngân hàng từ API
         bankError: '',         // Thông báo lỗi nếu có
         isLoading: false,
+        inputType: 'image',
+        inputText: '',
 
         async login() {
           if (!this.username || !this.password) {
@@ -159,7 +161,7 @@
 
         async uploadImages(event) {
           this.isLoading = true;
-          if (this.uploadedFiles.length && this.selectedBank) {
+          if (this.uploadedFiles.length && this.selectedBank || this.inputText && this.selectedBank) {
             // Giả lập OCR cho từng ảnh thành JSON
             this.ocrResults = [];
             this.editedQuestions = [];
@@ -167,9 +169,17 @@
             const API_URL = 'https://free-n8n.taikhoanai.store/webhook/upload-image';
 
             const formData = new FormData();
-            Array.from(this.uploadedFiles).forEach((file, index) => {
-              formData.append('data[]', file);
-            });
+            if (this.inputType == "image") {
+              Array.from(this.uploadedFiles).forEach((file, index) => {
+                formData.append('data[]', file);
+              });
+            }
+
+            if(this.inputType == "text"){
+              formData.append('textContent', this.inputText);
+            }
+            
+            formData.append('mode', this.inputType);
             formData.append('bank', this.selectedBank);
             formData.append('uiid', this.uiid);
             formData.append('token', this.token);
@@ -522,11 +532,42 @@
         <p x-show="bankError" class="mt-2 text-sm text-red-600" x-text="bankError"></p>
       </label>
 
-      <label class="block">
-        <span class="block text-sm font-medium text-gray-700 mb-1">Tải ảnh lên (< 1MB):</span>
-        <input type="file" multiple accept="image/*" @change="handleFileInput"  class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+      <div class="space-y-4">
+        <!-- Input type selector -->
+        <div class="flex space-x-4">
+          <label class="inline-flex items-center">
+            <input type="radio" name="inputType" value="image" checked x-model="inputType" class="form-radio">
+            <span class="ml-2">Tải ảnh lên</span>
+          </label>
+          <label class="inline-flex items-center">
+            <input type="radio" name="inputType" value="text" x-model="inputType" class="form-radio">
+            <span class="ml-2">Nhập text</span>
+          </label>
+        </div>
 
-      </label>
+        <!-- Image upload input -->
+        <label class="block" x-show="inputType === 'image'">
+          <span class="block text-sm font-medium text-gray-700 mb-1">Tải ảnh lên (< 1MB):</span>
+          <input 
+            type="file" 
+            multiple 
+            accept="image/*" 
+            @change="handleFileInput"  
+            class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
+          />
+        </label>
+
+        <!-- Text input -->
+        <label class="block" x-show="inputType === 'text'">
+          <span class="block text-sm font-medium text-gray-700 mb-1">Nhập nội dung text:</span>
+          <textarea
+            x-model="inputText"
+            rows="6"
+            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            placeholder="Nhập nội dung câu hỏi vào đây..."
+          ></textarea>
+        </label>
+      </div>
       <div class="flex justify-between items-center mt-6">
         <div class="">
 
@@ -563,7 +604,15 @@
 
           <!-- Câu hỏi MC -->
           <div x-show="q.type === 'MC'">
-            <label class="block mb-2 font-medium">Nội dung câu hỏi:</label>
+            <div class="flex justify-between items-center mb-2">
+              <label class="font-medium">Nội dung câu hỏi:</label>
+              <button 
+                @click="q.type = 'MMC'; q.answers = [q.answers[0]]" 
+                class="px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                Chuyển MMC
+              </button>
+            </div>
             <input type="text" x-model="q.question" class="w-full border border-gray-300 rounded px-3 py-2 mb-2">
             <div class="mb-2">
               <label class="font-medium block mb-1">Tùy chọn:</label>
@@ -584,7 +633,15 @@
           </div>
 
           <div x-show="q.type === 'MMC'">
-            <label class="block mb-2 font-medium">Nội dung câu hỏi:</label>
+            <div class="flex justify-between items-center mb-2">
+              <label class="font-medium">Nội dung câu hỏi:</label>
+              <button 
+                @click="q.type = 'MC'; q.answers = [q.answers[0] || 0]" 
+                class="px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                Chuyển MC
+              </button>
+            </div>
             <input type="text" x-model="q.question" class="w-full border border-gray-300 rounded px-3 py-2 mb-2">
             <div class="mb-2">
               <label class="font-medium block mb-1">Tùy chọn:</label>
