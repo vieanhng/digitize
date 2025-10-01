@@ -15,6 +15,7 @@
         uiid: '',
         token:'',
         uploadedFiles: '',
+         imagePreviews: [], // Sẽ lưu trữ { url, name } để hiển thị
         ocrResults: [],
         editedQuestions: [],
         selectedQuestions: [],
@@ -136,27 +137,38 @@
           const files = event.target.files;
           const maxSizeInBytes = 1 * 1024 * 1024; // 1MB
 
-          // Loop through all selected files
-          for (const file of files) {
-            // Check if the file size is greater than the max size
-            if (file.size > maxSizeInBytes) {
+          if (!files) return;
+          
+          this.uploadedFiles = [...this.uploadedFiles, ...Array.from(files)];
+
+          for (let i = this.uploadedFiles.length - files.length; i < this.uploadedFiles.length; i++) {
+            
+            if (this.uploadedFiles[i].size > maxSizeInBytes) {
               // Alert the user
-              alert(`File "${file.name}" quá lớn. Hãy chọn file dưới 1MB.`);
-
-              // Clear the file input's value
-              event.target.value = '';
-
-              // Reset the component's uploadedFiles state
-              this.uploadedFiles = [];
-
-              // Stop the function from processing further
-              return;
+              alert(`File "${this.uploadedFiles[i].name}" quá lớn. Hãy chọn file dưới 1MB.`);
+              // Xóa file khỏi mảng uploadedFiles
+              this.uploadedFiles.splice(i, 1);
+              continue;
             }
+
+            this.imagePreviews.push({
+              url: URL.createObjectURL(this.uploadedFiles[i]),
+              name: this.uploadedFiles[i].name
+            });
           }
 
-          // If the loop completes, all files are valid.
-          // Assign the files to your component's property.
-          this.uploadedFiles = files;
+        },
+
+        removeImage(index) {
+            // Xóa URL tạm thời để giải phóng bộ nhớ
+            URL.revokeObjectURL(this.imagePreviews[index].url);
+            // Xóa khỏi cả hai mảng
+            this.imagePreviews.splice(index, 1);
+            this.uploadedFiles.splice(index, 1);
+
+            // Cập nhật lại input file để phản ánh sự thay đổi (cách này hơi phức tạp)
+            // Cách đơn giản hơn là chỉ quản lý trong `filesToUpload` và sử dụng mảng này khi upload
+            // Điều này đảm bảo dữ liệu gửi đi là chính xác.
         },
 
         async uploadImages(event) {
@@ -447,359 +459,336 @@
     }
   </script>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
-  <!-- Header -->
+<body class="bg-slate-100 min-h-screen flex items-center justify-center p-4 font-sans antialiased" x-data="appData()">
+
+  <!-- Overlay Loading Toàn màn hình -->
   <template x-if="isLoading">
-    <div class="fixed inset-0 bg-gray-900 bg-opacity-70 flex items-center justify-center z-50">
-      <div class="bg-white p-4 rounded-lg shadow-lg flex items-center space-x-4">
-        <svg class="animate-spin h-6 w-6 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <div class="fixed inset-0 bg-slate-900 bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm">
+      <div class="bg-white p-6 rounded-xl shadow-2xl flex items-center space-x-4">
+        <svg class="animate-spin h-8 w-8 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V4a10 10 0 1010 10h-2a8 8 0 01-8-8z"></path>
         </svg>
-        <span class="font-medium text-gray-700">Đang xử lý, vui lòng chờ...</span>
+        <span class="text-lg font-semibold text-slate-700">Đang xử lý, vui lòng chờ...</span>
       </div>
     </div>
   </template>
 
-  <div class="w-full max-w-4xl bg-white shadow-lg rounded-lg p-6 space-y-6">
-    <div class="max-w-4xl mx-auto px-6 flex justify-between items-center">
-      <h1 class="text-lg font-semibold text-gray-800">Ứng dụng số hóa câu hỏi từ ảnh</h1>
+  <!-- Container chính -->
+  <div class="w-full max-w-4xl bg-white shadow-xl rounded-xl p-8 space-y-8">
+    
+    <!-- Header -->
+    <header class="flex justify-between items-center pb-4 border-b border-slate-200">
+      <div class="flex items-center">
+        <img src="https://static-cloud.lotuslms.com/2023/12/11/42/6576b1b5d18d78fd5f032742/6576b668c45cb914b9036ab0.png" alt="Logo" class="h-8 w-auto mr-3">
+        <h1 class="text-2xl font-bold text-slate-800">Số Hóa Câu Hỏi Từ Ảnh</h1>
+      </div>
+      <div x-show="step > 0" class="bg-slate-100 rounded-full p-2 px-4 text-sm flex items-center space-x-3">
+        <span class="text-slate-600">Tài khoản: <strong class="font-semibold text-slate-800" x-text="username"></strong></span>
+        <button @click="logout()" class="font-semibold text-red-600 hover:text-red-800 transition-colors">
+          Đăng xuất
+        </button>
+      </div>
+    </header>
 
-      <!-- Nút đăng xuất -->
-      <div class="bg-gray-200 rounded-2xl p-1 px-3" x-show="step > 0">
-      Tài khoản: <span x-text="username"></span>
-      <button
-        @click="logout()"
-        class="text-sm text-red-600 hover:underline"
-      >
-        Đăng xuất
-      </button>
+    <!-- Breadcrumb được thiết kế lại -->
+    <div class="flex items-center space-x-2 text-xs md:text-sm">
+      <div class="flex items-center">
+        <span :class="step >= 0 ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'" class="w-6 h-6 rounded-full flex items-center justify-center font-bold">1</span>
+        <span :class="step >= 0 ? 'text-indigo-600' : 'text-slate-500'" class="ml-2 font-semibold">Đăng nhập</span>
+      </div>
+      <div :class="step >= 1 ? 'border-indigo-600' : 'border-slate-200'" class="flex-1 border-t-2"></div>
+      <div class="flex items-center">
+        <span :class="step >= 1 ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'" class="w-6 h-6 rounded-full flex items-center justify-center font-bold">2</span>
+        <span :class="step >= 1 ? 'text-indigo-600' : 'text-slate-500'" class="ml-2 font-semibold">Tải lên</span>
+      </div>
+      <div :class="step >= 2 ? 'border-indigo-600' : 'border-slate-200'" class="flex-1 border-t-2"></div>
+      <div class="flex items-center">
+        <span :class="step >= 2 ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'" class="w-6 h-6 rounded-full flex items-center justify-center font-bold">3</span>
+        <span :class="step >= 2 ? 'text-indigo-600' : 'text-slate-500'" class="ml-2 font-semibold">Chỉnh sửa</span>
+      </div>
+      <div :class="step >= 3 ? 'border-indigo-600' : 'border-slate-200'" class="flex-1 border-t-2"></div>
+      <div class="flex items-center">
+        <span :class="step >= 3 ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'" class="w-6 h-6 rounded-full flex items-center justify-center font-bold">4</span>
+        <span :class="step >= 3 ? 'text-indigo-600' : 'text-slate-500'" class="ml-2 font-semibold">Xác nhận</span>
+      </div>
+      <div :class="step >= 5 ? 'border-indigo-600' : 'border-slate-200'" class="flex-1 border-t-2"></div>
+      <div class="flex items-center">
+        <span :class="step >= 5 ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'" class="w-6 h-6 rounded-full flex items-center justify-center font-bold">5</span>
+        <span :class="step >= 5 ? 'text-indigo-600' : 'text-slate-500'" class="ml-2 font-semibold">Hoàn tất</span>
       </div>
     </div>
-    <hr>
-    <!-- Breadcrumb -->
-    <div class="flex items-center text-sm text-gray-500 mb-6">
-      <span :class="{ 'font-semibold text-blue-600': step >= 0 }">Đăng nhập</span>
-      <span class="flex-1 border-t border-gray-300 mx-2"></span>
-      <span :class="{ 'font-semibold text-blue-600': step >= 1 }">Tải ảnh & Chọn ngân hàng</span>
-      <span class="flex-1 border-t border-gray-300 mx-2"></span>
-      <span :class="{ 'font-semibold text-blue-600': step >= 2 }">Chỉnh sửa nội dung</span>
-      <span class="flex-1 border-t border-gray-300 mx-2"></span>
-      <span :class="{ 'font-semibold text-blue-600': step >= 3 }">Xác nhận chọn</span>
-      <span class="flex-1 border-t border-gray-300 mx-2"></span>
-      <span :class="{ 'font-semibold text-blue-600': step >= 5 }">Hoàn tất</span>
-    </div>
-<template x-if="step === 0">
-    <!-- B0: Đăng nhập -->
-
-    <div>
-      <h2 class="text-xl font-bold mb-4 text-gray-700">Đăng nhập tài khoản</h2>
-      <div class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Tên đăng nhập:</label>
-          <input type="text" x-model="username" class="w-full border border-gray-300 rounded px-3 py-2" placeholder="Nhập tên đăng nhập" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Mật khẩu:</label>
-          <input type="password" x-model="password" class="w-full border border-gray-300 rounded px-3 py-2" placeholder="Nhập mật khẩu" />
-        </div>
-        <button @click="login()" class="mt-2 w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition">Đăng nhập</button>
-      </div>
-    </div>
-    </template>
-    <template x-if="step === 1">
-    <!-- B1: Nhập nhiều ảnh, Chọn ngân hàng -->
-    <div>
-      <h2 class="text-xl font-bold mb-4 text-gray-700">Chọn ngân hàng và tải nhiều ảnh lên</h2>
-      <label class="block mb-4">
-        <span class="block text-sm font-medium text-gray-700 mb-2">Nhập link ngân hàng:</span>
-        <div class="flex items-center gap-3">
-          <input
-            type="text"
-            x-model="selectedBankLink"
-            placeholder="Ví dụ: https://aeglobal.lotuslms.com/content/67ff785805099650af0a6c07"
-            class="flex-grow border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 px-3 py-2 text-sm"
-            autocomplete="off"
-          />
-          <button
-            @click="confirmBank"
-            class="h-[40px] px-4 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 transition"
-          >
-            Xác nhận
-          </button>
-        </div>
-        <p x-show="bankName" class="mt-2 text-sm text-green-600" x-text="`Tên ngân hàng: ${bankName}`"></p>
-        <p x-show="bankError" class="mt-2 text-sm text-red-600" x-text="bankError"></p>
-      </label>
-
-      <div class="space-y-4">
-        <!-- Input type selector -->
-        <div class="flex space-x-4">
-          <label class="inline-flex items-center">
-            <input type="radio" name="inputType" value="image" checked x-model="inputType" class="form-radio">
-            <span class="ml-2">Tải ảnh lên</span>
-          </label>
-          <label class="inline-flex items-center">
-            <input type="radio" name="inputType" value="text" x-model="inputType" class="form-radio">
-            <span class="ml-2">Nhập text</span>
-          </label>
-        </div>
-
-        <!-- Image upload input -->
-        <label class="block" x-show="inputType === 'image'">
-          <span class="block text-sm font-medium text-gray-700 mb-1">Tải ảnh lên (< 1MB):</span>
-          <input 
-            type="file" 
-            multiple 
-            accept="image/*" 
-            @change="handleFileInput"  
-            class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
-          />
-        </label>
-
-        <!-- Text input -->
-        <label class="block" x-show="inputType === 'text'">
-          <span class="block text-sm font-medium text-gray-700 mb-1">Nhập nội dung text:</span>
-          <textarea
-            x-model="inputText"
-            rows="6"
-            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            placeholder="Nhập nội dung câu hỏi vào đây..."
-          ></textarea>
-        </label>
-      </div>
-      <div class="flex justify-between items-center mt-6">
-        <div class="">
-
-        </div>
-          <button
-            @click="uploadImages"
-            class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
-          >
-            Tiếp tục
-          </button>
-        </div>
-    </div>
-
-  </template>
-<template x-if="step === 2">
-    <!-- B2: Chỉnh sửa nội dung câu hỏi -->
-    <div>
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-bold text-gray-700">Chỉnh sửa nội dung câu hỏi</h2>
-        <div class="space-x-2">
-          <button @click="addQuestion('MC')" class="text-xs px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">Thêm MC</button>
-          <button @click="addQuestion('MMC')" class="text-xs px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600">Thêm MMC</button>
-          <button @click="addQuestion('SA')" class="text-xs px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600">Thêm SA</button>
-          <button @click="addQuestion('TF')" class="text-xs px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600">Thêm TF</button>
-        </div>
-      </div>
-
-      <template x-for="(q, qIndex) in editedQuestions" :key="qIndex">
-        <div class="mb-6 border rounded-lg p-4 bg-gray-50 space-y-4">
-          <div class="flex justify-between items-center">
-            <strong x-text="`Câu hỏi ${q.type}`"></strong>
-            <button @click="removeQuestion(qIndex)" class="text-red-500 text-sm">Xóa câu hỏi</button>
-          </div>
-
-          <!-- Câu hỏi MC -->
-          <div x-show="q.type === 'MC'">
-            <div class="flex justify-between items-center mb-2">
-              <label class="font-medium">Nội dung câu hỏi:</label>
-              <button 
-                @click="q.type = 'MMC'; q.answers = [q.answers[0]]" 
-                class="px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
-              >
-                Chuyển MMC
-              </button>
+    
+    <!-- Các bước của quy trình -->
+    <main>
+      <!-- B0: Đăng nhập -->
+      <template x-if="step === 0">
+        <div class="max-w-md mx-auto">
+          <h2 class="text-xl font-semibold mb-6 text-slate-700 text-center">Đăng nhập tài khoản</h2>
+          <div class="space-y-4">
+            <div>
+              <label for="username" class="block text-sm font-medium text-slate-700 mb-1">Tên đăng nhập:</label>
+              <input id="username" type="text" x-model="username" class="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50" placeholder="Nhập tên đăng nhập" />
             </div>
-            <input type="text" x-model="q.question" class="w-full border border-gray-300 rounded px-3 py-2 mb-2">
-            <div class="mb-2">
-              <label class="font-medium block mb-1">Tùy chọn:</label>
-              <template x-for="(option, oIndex) in q.options" :key="oIndex">
-                <div class="flex items-center mb-1">
-                  <input type="text" x-model="q.options[oIndex]" class="flex-1 border border-gray-300 rounded px-3 py-1">
-                  <label class="ml-2 flex items-center">
-                    <input type="radio" :checked="q.answers[0] == oIndex" @click="
-                      setAnswer(qIndex, +oIndex)
-                    ">
-                    <span class="ml-1">Đáp án</span>
-                  </label>
-                  <button @click="removeOption(qIndex, oIndex)" class="ml-2 text-red-500 text-sm">Xóa</button>
-                </div>
-              </template>
+            <div>
+              <label for="password" class="block text-sm font-medium text-slate-700 mb-1">Mật khẩu:</label>
+              <input id="password" type="password" x-model="password" class="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50" placeholder="Nhập mật khẩu" />
             </div>
-            <button @click="addOption(qIndex)" class="text-blue-500 text-sm">+ Thêm tùy chọn</button>
-          </div>
-
-          <div x-show="q.type === 'MMC'">
-            <div class="flex justify-between items-center mb-2">
-              <label class="font-medium">Nội dung câu hỏi:</label>
-              <button 
-                @click="q.type = 'MC'; q.answers = [q.answers[0] || 0]" 
-                class="px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
-              >
-                Chuyển MC
-              </button>
-            </div>
-            <input type="text" x-model="q.question" class="w-full border border-gray-300 rounded px-3 py-2 mb-2">
-            <div class="mb-2">
-              <label class="font-medium block mb-1">Tùy chọn:</label>
-              <template x-for="(option, oIndex) in q.options" :key="oIndex">
-                <div class="flex items-center mb-1">
-                  <input type="text" x-model="q.options[oIndex]" class="flex-1 border border-gray-300 rounded px-3 py-1">
-                  <label class="ml-2 flex items-center">
-                    <input type="checkbox" :checked="q.answers.includes(oIndex)" @click="
-                      setMMCAnswer(qIndex, oIndex)
-                    ">
-                    <span class="ml-1">Đáp án</span>
-                  </label>
-                  <button @click="removeOption(qIndex, oIndex)" class="ml-2 text-red-500 text-sm">Xóa</button>
-                </div>
-              </template>
-            </div>
-            <button @click="addOption(qIndex)" class="text-blue-500 text-sm">+ Thêm tùy chọn</button>
-          </div>
-
-          <!-- Câu hỏi FILL -->
-          <div x-show="q.type === 'SA'">
-            <label class="block mb-2 font-medium">Nội dung câu hỏi (dùng __ để đánh dấu vị trí đáp án):</label>
-            <textarea
-              x-model="q.question"
-              @input="extractAnswersFromFill(qIndex)"
-              rows="3"
-              class="w-full border border-gray-300 rounded px-3 py-2 mb-2"
-            ></textarea>
-            <div class="mb-2">
-              <label class="font-medium block mb-1">Đáp án được trích xuất:</label>
-              <div class="text-sm text-gray-600" x-text="q.answers ? q.answers.join(', ') : 'Không có đáp án nào được trích xuất'"></div>
-            </div>
-          </div>
-
-          <!-- Câu hỏi TF -->
-          <div x-show="q.type === 'TF'">
-            <label class="block mb-2 font-medium">Tiêu đề:</label>
-            <input type="text" x-model="q.title" class="w-full border border-gray-300 rounded px-3 py-2 mb-2">
-            <div class="mb-2">
-              <label class="font-medium block mb-1">Phát biểu:</label>
-              <template x-for="(stmt, sIndex) in q.statements" :key="sIndex">
-                <div class="flex items-center mb-1">
-                  <input type="text" x-model="stmt.content" class="flex-1 border border-gray-300 rounded px-3 py-1">
-                  <select x-model="stmt.answer" class="ml-2 border border-gray-300 rounded px-2">
-                    <option value=1>Đúng</option>
-                    <option value=0>Sai</option>
-                  </select>
-                  <button @click="removeStatement(qIndex, sIndex)" class="ml-2 text-red-500 text-sm">Xóa</button>
-                </div>
-              </template>
-            </div>
-            <button @click="addStatement(qIndex)" class="text-blue-500 text-sm">+ Thêm phát biểu</button>
+            <button @click="login()" class="mt-4 w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all">Đăng nhập</button>
           </div>
         </div>
       </template>
 
-      <div class="flex justify-between items-center mt-6">
-    <button
-      @click="goBack()"
-      type="button"
-      class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
-    >
-      ← Quay lại
-    </button>
-    <button
-      @click="confirmEdit"
-      class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
-    >
-      Xác nhận chỉnh sửa
-    </button>
-  </div>
-    </div>
-</template>
-<template x-if="step === 3">
-    <!-- B3: Tick chọn nhiều câu hỏi cần số hóa -->
-    <div>
-      <h2 class="text-xl font-bold mb-4 text-gray-700">Tick chọn câu hỏi để số hóa</h2>
-      <div class="mb-4 flex items-center">
-        <input type="checkbox" x-model="selectAll" @click="selectAllQuestions" id="selectAll" class="h-5 w-5 text-blue-600 rounded focus:ring-blue-500">
-        <label for="selectAll" class="ml-2 font-medium text-gray-700">Chọn tất cả</label>
-      </div>
+      <!-- B1: Tải ảnh & Chọn ngân hàng -->
+      <template x-if="step === 1">
+        <div>
+          <h2 class="text-xl font-semibold mb-6 text-slate-700">Tải lên & Chọn ngân hàng câu hỏi</h2>
+          <div class="space-y-6">
+            <div>
+              <label for="bankLink" class="block text-sm font-medium text-slate-700 mb-2">Nhập link ngân hàng:</label>
+              <div class="flex items-center space-x-3">
+                <input id="bankLink" type="text" x-model="selectedBankLink" placeholder="Ví dụ: https://aeglobal.lotuslms.com/admin/content-manager/folder/68aec351a6652b2ccd024421" class="flex-grow block rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50" autocomplete="off" />
+                <button @click="confirmBank" class="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all">Xác nhận</button>
+              </div>
+              <p x-show="bankName" class="mt-2 text-sm text-green-600 font-medium" x-text="`✓ Tên ngân hàng: ${bankName}`"></p>
+              <p x-show="bankError" class="mt-2 text-sm text-red-600 font-medium" x-text="`✗ ${bankError}`"></p>
+            </div>
+            
+            <div class="border-t border-slate-200 pt-6">
+              <div class="flex items-center space-x-6 mb-4">
+                <label class="flex items-center space-x-2 cursor-pointer">
+                  <input type="radio" name="inputType" value="image" checked x-model="inputType" class="form-radio h-4 w-4 text-indigo-600 border-slate-300 focus:ring-indigo-500">
+                  <span class="font-medium text-slate-700">Tải ảnh lên</span>
+                </label>
+                <label class="flex items-center space-x-2 cursor-pointer">
+                  <input type="radio" name="inputType" value="text" x-model="inputType" class="form-radio h-4 w-4 text-indigo-600 border-slate-300 focus:ring-indigo-500">
+                  <span class="font-medium text-slate-700">Nhập văn bản</span>
+                </label>
+              </div>
+      
+              <div x-show="inputType === 'image'">
+                <label for="file-upload" class="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                  <div class="flex justify-center px-6 pt-5 pb-6 border-2 border-slate-300 border-dashed rounded-md">
+                    <div class="space-y-1 text-center">
+                      <svg class="mx-auto h-12 w-12 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                      </svg>
+                      <div class="flex text-sm text-slate-600">
+                        <p class="pl-1">Kéo thả hoặc <span class="text-indigo-600 font-semibold">chọn nhiều file</span> để tải lên</p>
+                        <!-- Thêm id 'file-upload' vào input -->
+                        <input id="file-upload" type="file" multiple accept="image/*" @change="handleFileInput" class="sr-only">
+                      </div>
+                      <p class="text-xs text-slate-500">PNG, JPG, GIF up to 1MB</p>
+                    </div>
+                  </div>
+                </label>
 
-      <template x-for="(question, index) in editedQuestions" :key="index">
-        <div class="border p-4 rounded-lg bg-gray-50 mb-4">
-          <label class="flex items-start cursor-pointer">
-            <input type="checkbox" :checked="selectedQuestions.includes(index)" @click="toggleQuestion(index)" class="mt-1 h-5 w-5 text-blue-600 rounded focus:ring-blue-500">
-            <div class="ml-3 whitespace-pre-wrap" x-text="question.type == 'TF' ? question.title : question.question"></div>
-          </label>
+                <!-- NEW: Vùng hiển thị ảnh đã chọn -->
+                <div x-show="imagePreviews.length > 0" class="mt-6">
+                  <h3 class="text-sm font-medium text-slate-700 mb-2" x-text="`Đã chọn ${imagePreviews.length} ảnh:`"></h3>
+                  <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4">
+                    <template x-for="(image, index) in imagePreviews" :key="index">
+                      <div class="relative group aspect-square">
+                        <img :src="image.url" alt="Image preview" class="w-full h-full object-cover rounded-lg shadow-sm">
+                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center rounded-lg">
+                           <button @click="removeImage(index)" class="absolute top-1 right-1 h-6 w-6 bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none focus:ring-2 focus:ring-red-500">
+                              &times;
+                           </button>
+                        </div>
+                        <p class="text-xs text-slate-600 truncate mt-1" x-text="image.name"></p>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+                <!-- END NEW -->
+              </div>
+      
+              <div x-show="inputType === 'text'">
+                <label for="text-input" class="block text-sm font-medium text-slate-700 mb-1">Nhập nội dung:</label>
+                <textarea id="text-input" x-model="inputText" rows="8" class="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50" placeholder="Nhập hoặc dán nội dung câu hỏi vào đây..."></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="flex justify-end items-center mt-8">
+            <button @click="uploadImages" class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+              Tiếp tục
+              <svg xmlns="http://www.w3.org/2000/svg" class="ml-2 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </template>
+      
+      <!-- ... (Các bước còn lại không thay đổi) ... -->
+      <template x-if="step === 2">
+        <div>
+          <div class="flex justify-between items-center mb-6">
+            <h2 class="text-xl font-semibold text-slate-700">Chỉnh sửa nội dung câu hỏi</h2>
+            <div class="flex items-center space-x-2">
+                <span class="text-sm font-medium text-slate-600">Thêm mới:</span>
+                <button @click="addQuestion('MC')" class="px-3 py-1.5 text-xs font-semibold text-white bg-blue-500 rounded-md hover:bg-blue-600 transition">MC</button>
+                <button @click="addQuestion('MMC')" class="px-3 py-1.5 text-xs font-semibold text-white bg-yellow-500 rounded-md hover:bg-yellow-600 transition">MMC</button>
+                <button @click="addQuestion('SA')" class="px-3 py-1.5 text-xs font-semibold text-white bg-green-500 rounded-md hover:bg-green-600 transition">SA</button>
+                <button @click="addQuestion('TF')" class="px-3 py-1.5 text-xs font-semibold text-white bg-purple-500 rounded-md hover:bg-purple-600 transition">TF</button>
+            </div>
+          </div>
+
+          <div class="space-y-6">
+            <template x-for="(q, qIndex) in editedQuestions" :key="qIndex">
+              <div class="border border-slate-200 rounded-lg p-4 bg-slate-50 shadow-sm space-y-4">
+                <div class="flex justify-between items-center pb-3 border-b border-slate-200">
+                  <strong class="font-semibold text-indigo-700" x-text="`Câu hỏi ${qIndex + 1}: [${q.type}]`"></strong>
+                  <button @click="removeQuestion(qIndex)" class="text-red-500 hover:text-red-700 text-sm font-medium">Xóa câu hỏi</button>
+                </div>
+
+                <!-- MC & MMC -->
+                <div x-show="q.type === 'MC' || q.type === 'MMC'">
+                  <div class="flex justify-between items-start mb-2">
+                    <label class="font-medium text-slate-800">Nội dung câu hỏi:</label>
+                    <button @click="q.type === 'MC' ? (q.type = 'MMC') : (q.type = 'MC', q.answers = [q.answers[0] || 0])" class="px-2 py-1 text-xs font-semibold bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200">
+                      <span x-text="q.type === 'MC' ? 'Chuyển sang MMC' : 'Chuyển sang MC'"></span>
+                    </button>
+                  </div>
+                  <input type="text" x-model="q.question" class="w-full border-slate-300 rounded-md shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                  <div class="mt-3">
+                    <label class="font-medium text-slate-800 block mb-2">Các tùy chọn:</label>
+                    <div class="space-y-2">
+                      <template x-for="(option, oIndex) in q.options" :key="oIndex">
+                        <div class="flex items-center space-x-2">
+                          <input type="text" x-model="q.options[oIndex]" class="flex-1 border-slate-300 rounded-md shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                          <label class="flex items-center space-x-1.5">
+                            <input x-show="q.type === 'MC'" type="radio" :name="`q-${qIndex}`" :checked="q.answers[0] == oIndex" @click="setAnswer(qIndex, +oIndex)" class="form-radio h-4 w-4 text-indigo-600 focus:ring-indigo-500">
+                            <input x-show="q.type === 'MMC'" type="checkbox" :checked="q.answers.includes(oIndex)" @click="setMMCAnswer(qIndex, oIndex)" class="form-checkbox h-4 w-4 text-indigo-600 rounded focus:ring-indigo-500">
+                            <span class="text-sm text-slate-600">Đáp án</span>
+                          </label>
+                          <button @click="removeOption(qIndex, oIndex)" class="p-1 text-slate-400 hover:text-red-600 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                  <button @click="addOption(qIndex)" class="mt-3 text-indigo-600 hover:text-indigo-800 font-semibold text-sm">+ Thêm tùy chọn</button>
+                </div>
+                
+                <!-- SA (Short Answer / Fill) -->
+                <div x-show="q.type === 'SA'">
+                  <label class="block mb-2 font-medium text-slate-800">Nội dung câu hỏi (dùng `__` để đánh dấu vị trí đáp án):</label>
+                  <textarea x-model="q.question" @input="extractAnswersFromFill(qIndex)" rows="4" class="w-full border-slate-300 rounded-md shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                  <div class="mt-2 p-3 bg-indigo-50 rounded-md">
+                    <label class="font-medium text-sm text-indigo-800 block">Đáp án được trích xuất:</label>
+                    <div class="text-sm text-slate-600 font-mono" x-text="q.answers && q.answers.length > 0 ? q.answers.join(', ') : 'Chưa có đáp án nào.'"></div>
+                  </div>
+                </div>
+
+                <!-- TF (True/False) -->
+                <div x-show="q.type === 'TF'">
+                  <label class="block mb-2 font-medium text-slate-800">Tiêu đề chung:</label>
+                  <input type="text" x-model="q.title" class="w-full border-slate-300 rounded-md shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                  <div class="mt-3">
+                    <label class="font-medium text-slate-800 block mb-2">Các phát biểu:</label>
+                    <div class="space-y-2">
+                        <template x-for="(stmt, sIndex) in q.statements" :key="sIndex">
+                          <div class="flex items-center space-x-2">
+                            <input type="text" x-model="stmt.content" class="flex-1 border-slate-300 rounded-md shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                            <select x-model="stmt.answer" class="border-slate-300 rounded-md shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                              <option value=1>Đúng</option>
+                              <option value=0>Sai</option>
+                            </select>
+                            <button @click="removeStatement(qIndex, sIndex)" class="p-1 text-slate-400 hover:text-red-600 rounded-full">
+                               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                          </div>
+                        </template>
+                    </div>
+                  </div>
+                  <button @click="addStatement(qIndex)" class="mt-3 text-indigo-600 hover:text-indigo-800 font-semibold text-sm">+ Thêm phát biểu</button>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <div class="flex justify-between items-center mt-8 pt-6 border-t border-slate-200">
+            <button @click="goBack()" type="button" class="inline-flex items-center px-5 py-2.5 border border-slate-300 text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+              <svg xmlns="http://www.w3.org/2000/svg" class="mr-2 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+              </svg>
+              Quay lại
+            </button>
+            <button @click="confirmEdit" class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+              Xác nhận & Tiếp tục
+              <svg xmlns="http://www.w3.org/2000/svg" class="ml-2 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+              </svg>
+            </button>
+          </div>
         </div>
       </template>
 
-      <div class="flex justify-between items-center mt-6">
-          <button
-            @click="goBack()"
-            type="button"
-            class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
-          >
-            ← Quay lại
-          </button>
-          <button
-            @click="digitize"
-            class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
-          >
-            Số hóa
+      <template x-if="step === 3">
+        <div>
+          <h2 class="text-xl font-semibold mb-2 text-slate-700">Chọn câu hỏi để số hóa</h2>
+          <p class="text-sm text-slate-500 mb-6">Chỉ những câu hỏi được chọn mới được thêm vào ngân hàng.</p>
+          <div class="mb-4 p-3 bg-slate-100 rounded-md">
+            <label class="flex items-center space-x-3 cursor-pointer">
+              <input type="checkbox" x-model="selectAll" @click="selectAllQuestions" id="selectAll" class="h-5 w-5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500">
+              <span for="selectAll" class="font-semibold text-slate-800">Chọn tất cả</span>
+            </label>
+          </div>
+          
+          <div class="space-y-3">
+            <template x-for="(question, index) in editedQuestions" :key="index">
+              <label class="flex items-start space-x-4 p-4 border rounded-lg cursor-pointer transition-colors" :class="selectedQuestions.includes(index) ? 'bg-indigo-50 border-indigo-300' : 'bg-white border-slate-200 hover:bg-slate-50'">
+                <input type="checkbox" :checked="selectedQuestions.includes(index)" @click="toggleQuestion(index)" class="mt-1 h-5 w-5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 shrink-0">
+                <span class="text-sm text-slate-700 whitespace-pre-wrap" x-text="`${index + 1}. ${question.type == 'TF' ? question.title : question.question}`"></span>
+              </label>
+            </template>
+          </div>
+          
+          <div class="flex justify-between items-center mt-8 pt-6 border-t border-slate-200">
+             <button @click="goBack()" type="button" class="inline-flex items-center px-5 py-2.5 border border-slate-300 text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                <svg xmlns="http://www.w3.org/2000/svg" class="mr-2 h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" /></svg>
+                Quay lại
+              </button>
+            <button @click="digitize" class="inline-flex items-center px-8 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+              Số hóa các câu đã chọn
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <template x-if="step === 5">
+        <div class="flex flex-col items-center justify-center text-center py-12">
+          <div class="p-4 bg-green-100 rounded-full mb-4">
+            <svg class="w-16 h-16 text-green-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+          </div>
+          <h2 class="text-2xl font-bold text-slate-800">Số hóa thành công!</h2>
+          <p class="text-slate-600 text-lg mt-2 mb-8">
+            Các câu hỏi đã được lưu vào ngân hàng <strong class="text-indigo-600" x-text="bankName"></strong>.
+          </p>
+          <button @click="newSession" type="button" class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+            <svg xmlns="http://www.w3.org/2000/svg" class="mr-2 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd" />
+            </svg>
+            Tạo phiên làm việc mới
           </button>
         </div>
-    </div>
-</template>
-<template x-if="step === 4">
-    <!-- B4: Đang xử lý -->
-    <div>
-      <h2 class="text-xl font-bold mb-4 text-gray-700">Đang thực hiện số hóa...</h2>
-      <div class="flex justify-center py-8">
-        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    </div>
-</template>
-<template x-if="step === 5">
-  <div class="flex flex-col items-center justify-center min-h-[200px] text-center">
-    <!-- Icon thành công -->
-    <div class="flex items-center mb-4">
-      <svg class="w-8 h-8 text-green-500 mr-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-      </svg>
-      <h2 class="text-xl font-bold text-gray-800">Số hóa thành công!</h2>
-    </div>
-
-    <!-- Thông báo kết quả -->
-    <p class="text-green-700 text-lg mb-6">
-      Các câu hỏi đã được lưu vào ngân hàng <span class="text-bold" x-text="bankName"></span>
-    </p>
-
-    <!-- Nút hành động -->
-    <div class="flex justify-between items-center mt-6">
-      <button
-        @click="newSession"
-        type="button"
-        class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center space-x-2"
-      >
-        <span>Số hóa ảnh mới</span>
-      </button>
-    </div>
-  </div>
-</template>
-    <footer class="mt-8 border-t border-gray-300 pt-4 text-center text-sm text-gray-600">
+      </template>
+    </main>
+    
+    <!-- Footer -->
+    <footer class="mt-8 border-t border-slate-200 pt-6 text-center text-sm text-slate-500">
       <p>
-        Hướng dẫn sử dụng:
-        <a
-                href=" https://docs.google.com/document/d/13nGqkB_lTaCx5ruf2Im0xQ3ICyPKVMbc3kZgybehCWA/edit?tab=t.0"
-                target="_blank"
-                class="text-blue-500 hover:underline"
-        >
-          Xem tài liệu hướng dẫn tại đây
+        Cần trợ giúp?
+        <a href="https://docs.google.com/document/d/13nGqkB_lTaCx5ruf2Im0xQ3ICyPKVMbc3kZgybehCWA/edit?tab=t.0" target="_blank" class="font-medium text-indigo-600 hover:underline">
+          Xem tài liệu hướng dẫn
         </a>
       </p>
-      <p class="mt-2">© 2025 - Ứng dụng số hóa câu hỏi từ ảnh</p>
+      <p class="mt-2 text-xs">© 2025 - Nền tảng số hóa câu hỏi</p>
     </footer>
   </div>
-
-</body>
+  </body>
 </html>
