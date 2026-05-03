@@ -243,7 +243,7 @@
                   if (item.type == "SA") {
                     const questionText = item.question;
                     const matches = [...questionText.matchAll(/__(.*?)__/g)];
-                    const answers = matches.map(m => m[1]);
+                    const answers = matches.map(m => m[1].split('/').map(ans => ans.trim()));
                     return {
                       ...item,
                       answers: answers
@@ -377,7 +377,7 @@
         extractAnswersFromFill(qIndex) {
           const questionText = this.editedQuestions[qIndex].question;
           const matches = [...questionText.matchAll(/__(.*?)__/g)];
-          const answers = matches.map(m => m[1]);
+          const answers = matches.map(m => m[1].split('/').map(ans => ans.trim()));
           this.editedQuestions[qIndex].answers = answers;
         },
 
@@ -740,7 +740,8 @@
                   <div class="mt-2 p-3 bg-indigo-50 rounded-md">
                     <label class="font-medium text-sm text-indigo-800 block">Đáp án được trích xuất:</label>
                     <div class="text-sm text-slate-600 font-mono"
-                      x-text="q.answers && q.answers.length > 0 ? q.answers.join(', ') : 'Chưa có đáp án nào.'"></div>
+                      x-text="q.answers && q.answers.length > 0 ? q.answers.map(a => Array.isArray(a) ? a.join(' HOẶC ') : a).join(', ') : 'Chưa có đáp án nào.'">
+                    </div>
                   </div>
                 </div>
 
